@@ -21,7 +21,7 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #131815;
     --surface: #1b211d;
     --surface-2: #232b26;
@@ -38,7 +38,27 @@
     --good: #7fd3a5;
     --good-soft: #1c3627;
     --shadow: none;
+    color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+    --bg: #131815;
+    --surface: #1b211d;
+    --surface-2: #232b26;
+    --text: #e4ebe6;
+    --muted: #9aa7a0;
+    --border: #2f3a33;
+    --accent: #6cc196;
+    --accent-ink: #0d1a13;
+    --accent-soft: #1f3a2b;
+    --warn: #e7b25c;
+    --warn-soft: #3a2e17;
+    --bad: #f08a80;
+    --bad-soft: #3d2120;
+    --good: #7fd3a5;
+    --good-soft: #1c3627;
+    --shadow: none;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }

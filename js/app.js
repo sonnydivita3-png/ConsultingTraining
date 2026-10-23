@@ -366,7 +366,7 @@
       h += '<div class="card"><h3>Prompt ' + (i + 1) + "</h3><p>" + t.prompt + '</p><textarea data-i="' + i + '" placeholder="Your explanation...">' + esc(typeof saved === "string" ? saved : "") + '</textarea>' +
         '<div class="small muted cc" data-i="' + i + '"></div><div class="btn-row"><button class="btn secondary rv" data-i="' + i + '">Reveal model answer</button></div><div class="model" data-i="' + i + '"' + (saved ? "" : ' hidden') + '><div class="callout"><strong>Model answer</strong>' + t.model + '</div><p class="small muted">Did you miss anything important? Add it to your answer above in your own words before moving on.</p></div></div>';
     });
-    h += '<div class="btn-row"><button class="btn" id="tdone">Save and continue to exam</button></div>';
+    h += '<div class="btn-row"><button class="btn" id="tdone">Save and continue to exam</button></div><div id="tmsg"></div>';
     render(h);
     function counts() {
       main.querySelectorAll("textarea").forEach(function (ta) {
@@ -392,7 +392,7 @@
         else missing.push(+i + 1);
       });
       save();
-      if (missing.length) { alert("Finish prompt(s) " + missing.join(", ") + ": write at least " + MIN + " characters and reveal the model answer."); return; }
+      if (missing.length) { document.getElementById("tmsg").innerHTML = '<div class="feedback bad">Finish prompt(s) ' + missing.join(", ") + ": write at least " + MIN + " characters and reveal the model answer.</div>"; return; }
       location.hash = "#/m/" + id + "/exam";
     };
   }
@@ -406,7 +406,7 @@
       '<div class="callout"><strong>Rules</strong>' + views.length + " questions drawn at random. Pass mark " + pct(opts.pass) + ". No notes, no lessons — this is retrieval practice. Explanations for every question are shown after you submit. A retake draws a new set.</div>";
     h += '<div id="examForm">';
     views.forEach(function (v, k) { h += qHTML(v, k + 1, "x" + k); });
-    h += '</div><div class="btn-row"><button class="btn" id="submitExam">Submit exam</button><span class="muted small" id="ansCount"></span></div>';
+    h += '</div><div class="btn-row"><button class="btn" id="submitExam">Submit exam</button><span class="muted small" id="ansCount"></span></div><div id="submitMsg"></div>';
     render(h);
     function count() {
       var n = 0; views.forEach(function (v, k) { if (readAnswer(main.querySelectorAll(".q")[k], v, "x" + k) !== null) n++; });
@@ -415,8 +415,15 @@
     }
     var form = document.getElementById("examForm");
     form.addEventListener("input", count); form.addEventListener("change", count); count();
+    var warned = false;
     document.getElementById("submitExam").onclick = function () {
-      if (count() < views.length && !confirm("Some questions are unanswered and will be marked wrong. Submit anyway?")) return;
+      var left = views.length - count();
+      if (left > 0 && !warned) {
+        warned = true;
+        document.getElementById("submitMsg").innerHTML = '<div class="feedback bad">' + left + " question(s) unanswered. They will be marked wrong. Select Submit exam again to submit anyway.</div>";
+        return;
+      }
+      var sm = document.getElementById("submitMsg"); if (sm) sm.remove();
       var results = views.map(function (v, k) {
         var box = main.querySelectorAll(".q")[k], a = readAnswer(box, v, "x" + k);
         box.querySelectorAll("input").forEach(function (i) { i.disabled = true; });
@@ -597,24 +604,41 @@
     });
     h += "</tbody></table></div>";
     h += '<div class="card noprint"><h3>Backup and transfer</h3><p class="small">Progress lives in this browser only. Export a file to back it up, move to another device, or show your supervisor.</p>' +
-      '<div class="btn-row"><button class="btn secondary" id="exp">Export progress</button><label class="btn ghost">Import progress<input type="file" id="imp" accept="application/json" hidden></label><button class="btn ghost" onclick="window.print()">Print transcript</button><button class="btn danger" id="rst">Reset all progress</button></div></div>';
+      '<div class="btn-row"><button class="btn secondary" id="exp">Export progress</button><label class="btn ghost">Import progress<input type="file" id="imp" accept="application/json" hidden></label><button class="btn danger" id="rst">Reset all progress</button></div><div id="pmsg"></div></div>';
     render(h);
+    var pmsg = document.getElementById("pmsg");
     document.getElementById("exp").onclick = function () {
-      var blob = new Blob([JSON.stringify(S, null, 2)], { type: "application/json" });
-      var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-      a.download = "wca-progress-" + (S.name || "learner").replace(/\W+/g, "-") + ".json"; a.click();
+      var json = JSON.stringify(S, null, 2);
+      try {
+        var blob = new Blob([json], { type: "application/json" });
+        var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+        a.download = "wca-progress-" + (S.name || "learner").replace(/\W+/g, "-") + ".json"; a.click();
+      } catch (x) { /* downloads may be blocked; the text below still works */ }
+      // Some hosts block downloads, so also show the data for copy and paste into a .json file.
+      pmsg.innerHTML = '<p class="small">If no file downloaded, copy this text and save it as a <code>.json</code> file.</p><textarea id="expText" readonly>' + esc(json) + '</textarea><div class="btn-row"><button class="btn ghost" id="expCopy">Copy</button></div>';
+      document.getElementById("expCopy").onclick = function () {
+        var ta = document.getElementById("expText"), b = this;
+        var done = function () { b.textContent = "Copied"; };
+        try { navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); }); } catch (x) { ta.select(); }
+      };
     };
     document.getElementById("imp").onchange = function (e) {
       var f = e.target.files[0]; if (!f) return;
       var r = new FileReader();
       r.onload = function () {
         try { var d = JSON.parse(r.result); if (!d.modules) throw 0; S = Object.assign(blankState(), d); save(); route(); }
-        catch (x) { alert("That file is not a valid progress export."); }
+        catch (x) { pmsg.innerHTML = '<div class="feedback bad">That file is not a valid progress export. Choose a .json file created by Export progress.</div>'; }
       };
       r.readAsText(f);
     };
+    var armed = false;
     document.getElementById("rst").onclick = function () {
-      if (confirm("Erase all progress in this browser? This cannot be undone unless you exported a backup.")) { S = blankState(); save(); location.hash = "#/"; route(); }
+      if (!armed) {
+        armed = true; this.textContent = "Select again to erase everything";
+        pmsg.innerHTML = '<div class="feedback bad">This erases all progress in this browser. It cannot be undone unless you exported a backup.</div>';
+        return;
+      }
+      S = blankState(); save(); location.hash = "#/"; route();
     };
   }
 
@@ -623,7 +647,7 @@
     var fin = estate("final");
     if (!fin.passed) { render('<h1>Certificate</h1><p>The certificate unlocks when you pass the Final Comprehensive Exam.</p><a class="btn" href="#/">Home</a>'); return; }
     var hours = C.modules.reduce(function (a, m) { return a + (m.hours || 0); }, 0);
-    render('<div class="cert"><div class="muted">Certificate of Completion</div><h1>' + esc(S.name || "Learner") + '</h1><p>has completed all ' + C.modules.length + ' modules, ' + C.tracks.length + ' track checkpoints, and the final comprehensive exam of the</p><h2>' + esc(C.title) + '</h2><p>Environmental Consulting · Geotechnical Engineering · Construction Materials Testing · Civil Engineering</p><p>Approximately ' + hours + ' hours of instruction · Final exam score ' + pct(fin.best) + ' · ' + fmtDate(fin.passedOn) + '</p><p class="small muted">Demonstrates conceptual fluency and vocabulary. Not a substitute for required safety training, technician certification, or professional licensure.</p></div><div class="btn-row"><button class="btn" onclick="window.print()">Print</button></div>');
+    render('<div class="cert"><div class="muted">Certificate of Completion</div><h1>' + esc(S.name || "Learner") + '</h1><p>has completed all ' + C.modules.length + ' modules, ' + C.tracks.length + ' track checkpoints, and the final comprehensive exam of the</p><h2>' + esc(C.title) + '</h2><p>Environmental Consulting · Geotechnical Engineering · Construction Materials Testing · Civil Engineering</p><p>Approximately ' + hours + ' hours of instruction · Final exam score ' + pct(fin.best) + ' · ' + fmtDate(fin.passedOn) + '</p><p class="small muted">Demonstrates conceptual fluency and vocabulary. Not a substitute for required safety training, technician certification, or professional licensure.</p></div><p class="small muted noprint">To keep a copy, use your browser&#39;s print or save-as-PDF command.</p>');
   }
 
   // ---------- Router ----------
