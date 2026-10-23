@@ -161,6 +161,53 @@
     b.textContent = n; b.className = "badge" + (n ? "" : " zero");
   }
 
+
+  // ---------- Backup (export / import) ----------
+  function lastBackupText() {
+    if (!S.lastBackup) return "You haven't backed up yet.";
+    var days = Math.floor((Date.now() - S.lastBackup) / DAY);
+    return "Last backup: " + fmtDate(S.lastBackup) + (days >= 1 ? " (" + days + " day" + (days === 1 ? "" : "s") + " ago)" : " (today)") + ".";
+  }
+  function backupDue() { return !S.lastBackup || Date.now() - S.lastBackup > 7 * DAY; }
+  function backupControls(k) {
+    return '<p class="small muted" id="' + k + '-when">' + lastBackupText() + '</p><div class="btn-row"><button class="btn secondary" id="' + k + '-exp">Export progress</button>' +
+      '<label class="btn ghost">Import progress<input type="file" id="' + k + '-imp" accept="application/json" hidden></label></div><div id="' + k + '-msg"></div>';
+  }
+  function backupCard(k, title) {
+    return '<div class="card noprint backup-card"><h3>' + (title || "Save your progress") + '</h3><p class="small">Your progress is saved in this browser only. Export a backup file now and then, especially before switching computers or browsers or clearing your browsing data.</p>' + backupControls(k) + "</div>";
+  }
+  function exportProgress(msg) {
+    var json = JSON.stringify(Object.assign({}, S, { lastBackup: Date.now() }), null, 2);
+    try {
+      var blob = new Blob([json], { type: "application/json" });
+      var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+      a.download = "onboarding-progress-" + (S.name || "learner").replace(/\W+/g, "-") + "-" + today() + ".json"; a.click();
+    } catch (x) { /* downloads may be blocked; the text below still works */ }
+    S.lastBackup = Date.now(); save();
+    // Some hosts block downloads, so also show the data for copy and paste into a .json file.
+    msg.innerHTML = '<div class="feedback good">Backup created. Check your Downloads folder for the .json file.</div><details class="small"><summary>No file downloaded?</summary><p>Copy this text and save it as a <code>.json</code> file.</p><textarea readonly>' + esc(json) + '</textarea><div class="btn-row"><button class="btn ghost bk-copy">Copy</button></div></details>';
+    msg.querySelector(".bk-copy").onclick = function () {
+      var ta = msg.querySelector("textarea"), b = this;
+      try { navigator.clipboard.writeText(ta.value).then(function () { b.textContent = "Copied"; }, function () { ta.select(); }); } catch (x) { ta.select(); }
+    };
+  }
+  function wireBackup(k) {
+    var msg = document.getElementById(k + "-msg");
+    document.getElementById(k + "-exp").onclick = function () {
+      exportProgress(msg);
+      var w = document.getElementById(k + "-when"); if (w) w.textContent = lastBackupText();
+    };
+    document.getElementById(k + "-imp").onchange = function (e) {
+      var f = e.target.files[0]; if (!f) return;
+      var rd = new FileReader();
+      rd.onload = function () {
+        try { var d = JSON.parse(rd.result); if (!d.modules) throw 0; S = Object.assign(blankState(), d); save(); route(); }
+        catch (x) { msg.innerHTML = '<div class="feedback bad">That file is not a valid progress export. Choose a .json file created by Export progress.</div>'; }
+      };
+      rd.readAsText(f);
+    };
+  }
+
   // ---------- Sidebar ----------
   function renderSidebar(activeId) {
     var cur = currentUnit(), h = "", lastTrack = null, n = 0;
@@ -204,6 +251,10 @@
     } else {
       h += '<div class="card"><h2>Course complete</h2><p>You have passed every module, checkpoint, and the final exam. Keep your review streak going so it stays in long-term memory.</p><div class="btn-row"><a class="btn" href="#/cert">View certificate</a></div></div>';
     }
+    var started = Object.keys(S.modules).some(function (k) { return Object.keys(S.modules[k].lessons || {}).length > 0; });
+    if (S.name && started && backupDue()) {
+      h += '<div class="callout warn"><strong>Back up your progress</strong>' + lastBackupText() + ' Progress is stored in this browser only, so a backup file protects it if you switch computers or clear your browsing data.' + backupControls("home") + "</div>";
+    }
     h += '<div class="card"><h2>How this course makes it stick</h2>' +
       "<p>The structure follows learning techniques with the strongest experimental support (Dunlosky et al., 2013, <em>Psychological Science in the Public Interest</em> 14(1)):</p><ul>" +
       "<li><strong>Retrieval practice.</strong> Every lesson ends with questions you must answer correctly, and every module ends with a randomized exam. Testing yourself produces better long-term retention than rereading (Roediger &amp; Karpicke, 2006, <em>Psychological Science</em> 17(3)).</li>" +
@@ -213,6 +264,7 @@
       '<p class="small muted">Course bank: ' + C.modules.length + " modules, " + terms + " glossary terms, " + qs + " exam questions. Pass marks: modules and checkpoints " + pct(C.passMark) + ", final " + pct(C.finalPassMark) + ".</p></div>";
     h += '<div class="card"><h2>Important</h2><p class="small">This course builds vocabulary and conceptual fluency. It does not certify field competence, replace required training (for example OSHA HAZWOPER, nuclear gauge safety, or WisDOT HTCP and ACI certifications), or substitute for the current text of a regulation, standard, or project specification. Regulations and standards are revised; always check the current edition before relying on a number in practice.</p></div>';
     render(h);
+    if (document.getElementById("home-exp")) wireBackup("home");
     var go = document.getElementById("nmGo");
     if (go) go.onclick = function () { S.name = document.getElementById("nm").value.trim() || "Learner"; save(); route(); };
   }
@@ -256,6 +308,7 @@
     if (m.resources && m.resources.length) {
       h += '<div class="card"><h3>Primary sources for this module</h3><ul>' + m.resources.map(resLi).join("") + "</ul></div>";
     }
+    h += backupCard("mod");
     var next = !st.passed ? (done < m.lessons.length ? "#/m/" + id + "/l/" + done : !ss.cards ? "#/m/" + id + "/cards" : !ss.teach && (m.teach || []).length ? "#/m/" + id + "/teach" : "#/m/" + id + "/exam") : null;
     if (next) h += '<div class="btn-row"><a class="btn" href="' + next + '">' + (done ? "Resume" : "Begin") + "</a></div>";
     else {
@@ -263,6 +316,7 @@
       if (nu) h += '<div class="btn-row"><a class="btn" href="' + unitHref(nu) + '">Next: ' + esc(unitTitle(nu)) + "</a></div>";
     }
     render(h);
+    wireBackup("mod");
   }
   function step(href, done, locked, ico, t, d) {
     return '<a class="step' + (done ? " done" : "") + (locked ? " locked" : "") + '" href="' + href + '"><span class="ico">' + (done ? "&#10003;" : ico) + '</span><span class="body"><span class="t">' + esc(t) + '</span><br><span class="d">' + d + "</span></span></a>";
@@ -440,10 +494,11 @@
       var banner = '<div class="callout ' + (passed ? "" : "bad") + '"><strong>' + (passed ? "Passed — " : "Not yet — ") + pct(score) + " (" + results.filter(function (r) { return r.ok; }).length + "/" + results.length + ")</strong>" +
         (passed ? "Well done. Missed questions were added to your review deck. Read the explanations below before moving on." :
           "You need " + pct(opts.pass) + ". Every question you missed is now in your review deck. Read each explanation below, revisit the related lessons, and retake when ready — you will get a fresh set of questions.") + "</div>";
-      var top = el(banner + '<div class="btn-row">' + (passed ? '<a class="btn" href="' + opts.nextHref + '">Continue &rarr;</a>' : '<button class="btn" id="retake">Retake with new questions</button>') + '<a class="btn ghost" href="' + opts.backHref + '">Back</a></div>');
+      var top = el(banner + '<div class="btn-row">' + (passed ? '<a class="btn" href="' + opts.nextHref + '">Continue &rarr;</a><button class="btn secondary" id="ex-exp">Back up progress now</button>' : '<button class="btn" id="retake">Retake with new questions</button>') + '<a class="btn ghost" href="' + opts.backHref + '">Back</a></div><div id="ex-msg"></div>');
       main.insertBefore(top, main.children[1]);
       document.getElementById("submitExam").remove();
       var rt = document.getElementById("retake"); if (rt) rt.onclick = function () { route(); };
+      var bx = document.getElementById("ex-exp"); if (bx) bx.onclick = function () { exportProgress(document.getElementById("ex-msg")); };
       renderSidebar(opts.activeId); updateBadge(); window.scrollTo(0, 0);
     };
   }
@@ -625,34 +680,11 @@
       h += "<tr><td>" + esc(unitTitle(u)) + "</td><td>" + status + "</td><td>" + (st.attempts.length ? pct(st.best) : "—") + "</td><td>" + st.attempts.length + "</td><td>" + fmtDate(st.passedOn) + "</td></tr>";
     });
     h += "</tbody></table></div>";
-    h += '<div class="card noprint"><h3>Backup and transfer</h3><p class="small">Progress lives in this browser only. Export a file to back it up, move to another device, or show your supervisor.</p>' +
-      '<div class="btn-row"><button class="btn secondary" id="exp">Export progress</button><label class="btn ghost">Import progress<input type="file" id="imp" accept="application/json" hidden></label><button class="btn danger" id="rst">Reset all progress</button></div><div id="pmsg"></div></div>';
+    h += '<div class="card noprint"><h3>Backup and transfer</h3><p class="small">Progress lives in this browser only. Export a file to back it up, move to another device, or show your supervisor.</p>' + backupControls("tr") +
+      '<div class="btn-row"><button class="btn danger" id="rst">Reset all progress</button></div><div id="pmsg"></div></div>';
     render(h);
+    wireBackup("tr");
     var pmsg = document.getElementById("pmsg");
-    document.getElementById("exp").onclick = function () {
-      var json = JSON.stringify(S, null, 2);
-      try {
-        var blob = new Blob([json], { type: "application/json" });
-        var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-        a.download = "wca-progress-" + (S.name || "learner").replace(/\W+/g, "-") + ".json"; a.click();
-      } catch (x) { /* downloads may be blocked; the text below still works */ }
-      // Some hosts block downloads, so also show the data for copy and paste into a .json file.
-      pmsg.innerHTML = '<p class="small">If no file downloaded, copy this text and save it as a <code>.json</code> file.</p><textarea id="expText" readonly>' + esc(json) + '</textarea><div class="btn-row"><button class="btn ghost" id="expCopy">Copy</button></div>';
-      document.getElementById("expCopy").onclick = function () {
-        var ta = document.getElementById("expText"), b = this;
-        var done = function () { b.textContent = "Copied"; };
-        try { navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); }); } catch (x) { ta.select(); }
-      };
-    };
-    document.getElementById("imp").onchange = function (e) {
-      var f = e.target.files[0]; if (!f) return;
-      var r = new FileReader();
-      r.onload = function () {
-        try { var d = JSON.parse(r.result); if (!d.modules) throw 0; S = Object.assign(blankState(), d); save(); route(); }
-        catch (x) { pmsg.innerHTML = '<div class="feedback bad">That file is not a valid progress export. Choose a .json file created by Export progress.</div>'; }
-      };
-      r.readAsText(f);
-    };
     var armed = false;
     document.getElementById("rst").onclick = function () {
       if (!armed) {
