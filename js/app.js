@@ -211,6 +211,8 @@
   // ---------- Sidebar ----------
   function renderSidebar(activeId) {
     var cur = currentUnit(), h = "", lastTrack = null, n = 0;
+    // On phones the top bar only has room for Review, so the other pages live here (hidden on desktop by CSS).
+    h += '<nav class="side-mobile-nav" aria-label="Pages"><a href="#/">Home</a><a href="#/tools">Tools</a><a href="#/glossary">Glossary</a><a href="#/resources">Library</a><a href="#/progress">Transcript</a></nav>';
     UNITS.forEach(function (u) {
       if (u.track && u.track !== lastTrack) { lastTrack = u.track; h += '<div class="side-track">' + esc(u.track.title) + "</div>"; }
       if (u.kind === "final") h += '<div class="side-track">Capstone</div>';
@@ -729,7 +731,15 @@
     if (p[0] === "cert") return viewCert();
     return viewHome();
   }
-  document.getElementById("menuBtn").onclick = function () { document.getElementById("sidebar").classList.toggle("open"); };
+  document.getElementById("menuBtn").onclick = function () {
+    var sb = document.getElementById("sidebar"), open = sb.classList.toggle("open");
+    this.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  // Tapping the page outside the open menu closes it.
+  document.getElementById("main").addEventListener("click", function () {
+    var sb = document.getElementById("sidebar");
+    if (sb.classList.contains("open")) { sb.classList.remove("open"); document.getElementById("menuBtn").setAttribute("aria-expanded", "false"); }
+  });
   window.addEventListener("hashchange", route);
   route();
 })();
