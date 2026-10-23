@@ -208,7 +208,8 @@ input[type=text], input[type=search] { font: inherit; padding: 8px 10px; border:
   cursor: pointer; box-shadow: var(--shadow); user-select: none;
 }
 .flash .side-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
-.flash .face { font-size: 1.15rem; }
+.flash .face { font-size: 1.15rem; overflow-wrap: anywhere; }
+.flash > div { min-width: 0; max-width: 100%; }
 .flash .face.term { font-size: 1.5rem; font-weight: 700; }
 
 /* Glossary */

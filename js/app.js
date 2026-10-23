@@ -828,6 +828,10 @@
     var sb = document.getElementById("sidebar"), open = sb.classList.toggle("open");
     this.setAttribute("aria-expanded", open ? "true" : "false");
   };
+  // Tapping any link in the menu closes it right away (phones).
+  document.getElementById("sidebar").addEventListener("click", function (e) {
+    if (e.target.closest("a")) { this.classList.remove("open"); document.getElementById("menuBtn").setAttribute("aria-expanded", "false"); }
+  });
   // Tapping the page outside the open menu closes it.
   document.getElementById("main").addEventListener("click", function () {
     var sb = document.getElementById("sidebar");
