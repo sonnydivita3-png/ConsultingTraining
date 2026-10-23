@@ -1,4 +1,4 @@
-/* Giles Engineering Associates: On-boarding Training — mastery-gated course runner.
+/* Wisconsin Consulting Academy — mastery-gated course runner.
  * Plain JavaScript, no dependencies. Progress is stored in localStorage
  * and can be exported/imported as JSON from the Transcript page. */
 (function () {

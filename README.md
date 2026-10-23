@@ -1,4 +1,4 @@
-# Giles Engineering Associates: On-boarding Training
+# Wisconsin Consulting Academy
 
 A mastery-gated onboarding course that teaches new employees the language of
 **environmental consulting, geotechnical engineering, construction materials
