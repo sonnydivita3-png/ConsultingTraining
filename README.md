@@ -60,6 +60,41 @@ term and question the learner has seen. Intervals are 1, 3, 7, 16, 35, 75, and
 The design draws on Dunlosky et al. (2013), Roediger & Karpicke (2006), and
 Cepeda et al. (2006). Citations are on the app's home page.
 
+## Interactive tools
+
+The **Tools** page has five calculators that draw to scale. Each one is also
+linked from the related modules:
+
+| Tool | What it does | Modules |
+|---|---|---|
+| USCS Soil Classifier | Classifies a soil from gradation and Atterberg limits per ASTM D2487 and plots it on the plasticity chart | 12, 13 |
+| Proctor Curve Builder | Converts trial points to dry density, fits the curve, reports MDD and OMC, and draws the zero-air-voids curve | 12, 15 |
+| Field Density Calculator | Percent compaction from nuclear gauge readings; sand cone density | 15 |
+| Trench Slope Visualizer | OSHA Appendix B maximum slopes drawn to equal scale, with the related OSHA requirements | 2, 14 |
+| Groundwater Flow Solver | Three-point problem: gradient, flow direction, seepage velocity, and a plan view to scale | 3, 9 |
+
+### How the tools are verified
+
+- **Separate, testable math.** All calculations live in `js/tools-core.js` as
+  pure functions. The visual layer (`js/tools-ui.js`) does no math of its own.
+- **Hand-worked reference cases.** `js/tools-reference.js` holds cases worked
+  by hand from the cited criteria, including exact boundary values (fines at 5%,
+  12%, and 50%; points on the A-line; Cc of 1 and 3; PI of 4 and 7).
+- **Independent second implementations.** Every engine has one, written a
+  different way: a rule-table USCS classifier, a Gaussian-elimination curve
+  fit, and the graphical three-point method. `tests/tools.test.js` checks both
+  implementations against each other over about 170,000 randomized inputs.
+  Run it with `node tests/tools.test.js`.
+- **Drawings measured back.** After each drawing, the app reads the plotted
+  coordinates out of the SVG and confirms they match the computed values (for
+  example, the drawn Type C slope must measure 1.5:1, and the flow arrow must
+  match the computed azimuth). Each tool shows its results under "How this tool
+  is verified."
+
+The tools state their limits on screen. For example, the USCS tool gives the
+group symbol and basic name but not the full D2487 group-name modifiers, and
+the Proctor fit is a parabola standing in for a hand-drawn curve.
+
 ## Sources and accuracy
 
 Lessons cite primary sources: Wisconsin Statutes and Administrative Code (NR,

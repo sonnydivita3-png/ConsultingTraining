@@ -248,6 +248,11 @@
     h += step("#/m/" + id + "/exam", st.passed, !(ss.teach || (!(m.teach || []).length && ss.cards)), "&#9733;", "Module exam",
       m.exam.count + " randomized questions from a bank of " + m.exam.bank.length + ". Pass mark " + pct(C.passMark) + "." + (st.attempts.length ? " Attempts: " + st.attempts.length + ", best " + pct(st.best) + "." : ""));
     h += "</div>";
+    var tools = window.WCA_TOOLS ? window.WCA_TOOLS.list.filter(function (t) { return t.modules.indexOf(id) >= 0; }) : [];
+    if (tools.length) {
+      h += '<div class="card"><h3>Interactive tools for this module</h3><p class="small muted">Practice the calculations with verified tools. Optional, but recommended before the exam.</p><ul>' +
+        tools.map(function (t) { return '<li><a href="#/tools/' + t.id + '">' + esc(t.title) + "</a> — " + esc(t.blurb) + "</li>"; }).join("") + "</ul></div>";
+    }
     if (m.resources && m.resources.length) {
       h += '<div class="card"><h3>Primary sources for this module</h3><ul>' + m.resources.map(resLi).join("") + "</ul></div>";
     }
@@ -583,6 +588,23 @@
     draw("");
   }
 
+  function viewTools(id) {
+    renderSidebar(null);
+    var T = window.WCA_TOOLS;
+    if (!T) { render("<h1>Tools</h1><p>The tools failed to load.</p>"); return; }
+    var t = id && T.get(id);
+    if (!t) {
+      render('<h1>Interactive Tools</h1><p class="muted">Calculators and to-scale drawings for the course\'s core calculations. Each tool checks itself against hand-worked reference cases and measures its own drawing to confirm it matches the numbers. Open "How this tool is verified" under any tool to see the results.</p><div class="steps">' +
+        T.list.map(function (x) {
+          var mods = x.modules.map(function (mid) { return MOD[mid] ? "Module " + MOD[mid].n : ""; }).join(", ");
+          return '<a class="step" href="#/tools/' + x.id + '"><span class="ico">&#9881;</span><span class="body"><span class="t">' + esc(x.title) + '</span><br><span class="d">' + esc(x.blurb) + " (" + mods + ")</span></span></a>";
+        }).join("") + "</div>");
+      return;
+    }
+    render('<div class="crumbs"><a href="#/tools">Tools</a></div><h1>' + esc(t.title) + '</h1><div id="toolRoot"></div>');
+    t.run(document.getElementById("toolRoot"));
+  }
+
   function viewResources() {
     renderSidebar(null);
     var h = '<h1>Library</h1><p class="muted">Primary sources cited in the course: statutes, administrative codes, federal regulations, agency guidance, and standards bodies. When a number matters on a project, read it here, in the current edition, not from memory.</p>';
@@ -670,6 +692,7 @@
     if (p[0] === "review") return viewReview();
     if (p[0] === "glossary") return viewGlossary();
     if (p[0] === "resources") return viewResources();
+    if (p[0] === "tools") return viewTools(p[1]);
     if (p[0] === "progress") return viewProgress();
     if (p[0] === "cert") return viewCert();
     return viewHome();
