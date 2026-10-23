@@ -17,7 +17,7 @@ It's a static site with no build step and no server-side code.
   from branch, root folder). The `.nojekyll` file is already in place.
 - **Any static host or intranet share:** copy the folder as-is.
 
-Progress is saved in the browser's `localStorage`. Learners can export and
+Progress is saved in the browser's `localStorage` after every step, including your place in a flashcard deck and teach-back drafts. Optional cross-device sync through Supabase is described in [SYNC-SETUP.md](SYNC-SETUP.md). Learners can export and
 import a JSON backup from the **Transcript** page, which is also how a
 supervisor can review someone's progress.
 
@@ -84,7 +84,7 @@ linked from the related modules:
   different way: a rule-table USCS classifier, a Gaussian-elimination curve
   fit, and the graphical three-point method. `tests/tools.test.js` checks both
   implementations against each other over about 170,000 randomized inputs.
-  Run it with `node tests/tools.test.js`.
+  Run it with `node tests/tools.test.js`. The progress merge used for sync is tested by `node tests/merge.test.js`.
 - **Drawings measured back.** After each drawing, the app reads the plotted
   coordinates out of the SVG and confirms they match the computed values (for
   example, the drawn Type C slope must measure 1.5:1, and the flow arrow must

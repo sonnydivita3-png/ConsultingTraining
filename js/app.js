@@ -23,8 +23,12 @@
     return blankState();
   }
   var S = load();
-  function save() {
+  function saveLocal() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
+  }
+  function save() {
+    saveLocal();
+    if (window.WCA_SYNC && window.WCA_SYNC.enabled) window.WCA_SYNC.changed();
   }
   function mstate(id) {
     if (!S.modules[id]) S.modules[id] = { lessons: {}, cards: false, teach: {}, attempts: [], passed: false, passedOn: null, best: 0 };
@@ -135,7 +139,7 @@
 
   // ---------- SRS ----------
   function srsSet(id, box, dueInDays) {
-    S.srs[id] = { box: box, due: Date.now() + Math.round(dueInDays * DAY) };
+    S.srs[id] = { box: box, due: Date.now() + Math.round(dueInDays * DAY), t: Date.now() };
   }
   function srsSeed(id, box, dueInDays) { if (!S.srs[id]) srsSet(id, box, dueInDays); }
   function srsGrade(id, ok) {
@@ -208,8 +212,77 @@
     };
   }
 
+
+  // ---------- Cross-device sync UI ----------
+  function syncStatusLine(s) {
+    if (s.status === "synced") return "&#9729; Synced" + (s.lastSync ? " " + new Date(s.lastSync).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+    if (s.status === "syncing") return "&#9729; Syncing&hellip;";
+    if (s.status === "error") return '&#9888; Not synced. <a href="#/progress">Details</a>';
+    if (s.status === "connecting") return "&#9729; Connecting&hellip;";
+    return '<a href="#/progress">Sign in to sync across devices</a>';
+  }
+  function syncPanel(k) {
+    if (!(window.WCA_SYNC && window.WCA_SYNC.enabled)) return "";
+    return '<div class="card noprint" id="' + k + '-sync"></div>';
+  }
+  function fillSyncPanel(k) {
+    var box = document.getElementById(k + "-sync"); if (!box) return;
+    var Y = window.WCA_SYNC, s = Y.state(), h = "<h3>Sync across devices</h3>";
+    if (s.status === "signedout" || s.status === "sending") {
+      h += '<p class="small">Sign in with your email to save progress online and pick up where you left off on any phone or computer. You\'ll get a sign-in link by email. No password needed.</p>' +
+        '<form id="' + k + '-sf" class="sync-form"><label class="tfield" for="' + k + '-em"><span>Email</span><input id="' + k + '-em" type="email" autocomplete="email" required placeholder="you@example.com"></label>' +
+        '<button class="btn" type="submit"' + (s.status === "sending" ? " disabled" : "") + ">" + (s.status === "sending" ? "Sending&hellip;" : "Email me a sign-in link") + "</button></form>";
+    } else if (s.status === "linksent") {
+      h += '<div class="feedback good">Sign-in link sent to <strong>' + esc(s.email || "") + '</strong>. Open that email <strong>on this device</strong> and tap the link. It can take a minute to arrive; check spam if you don\'t see it.</div><div class="btn-row"><button class="btn ghost" id="' + k + '-again">Use a different email</button></div>';
+    } else if (s.status === "connecting") {
+      h += '<p class="small muted">Connecting to sync&hellip;</p>';
+    } else {
+      h += '<p class="small">Signed in as <strong>' + esc(s.email || "") + "</strong>. Progress saves online automatically after every change and when you return to the app.</p>" +
+        '<p class="small muted">' + syncStatusLine(s) + "</p>" +
+        '<div class="btn-row"><button class="btn secondary" id="' + k + '-now">Sync now</button><button class="btn ghost" id="' + k + '-out">Sign out</button></div><p class="small muted">Signing out keeps your progress on this device.</p>';
+    }
+    if (s.error) h += '<div class="feedback bad">' + esc(s.error) + "</div>";
+    box.innerHTML = h;
+    var f = document.getElementById(k + "-sf");
+    if (f) f.addEventListener("submit", function (e) { e.preventDefault(); var em = document.getElementById(k + "-em").value.trim(); if (em) Y.signIn(em); });
+    var b;
+    if ((b = document.getElementById(k + "-again"))) b.onclick = function () { Y.reset(); };
+    if ((b = document.getElementById(k + "-now"))) b.onclick = function () { Y.syncNow(); };
+    if ((b = document.getElementById(k + "-out"))) b.onclick = function () { Y.signOut(); };
+  }
+  function refreshSyncUI() {
+    if (!(window.WCA_SYNC && window.WCA_SYNC.enabled)) return;
+    ["home", "tr"].forEach(function (k) {
+      var box = document.getElementById(k + "-sync");
+      // Don't wipe an email the person is typing.
+      if (box && !(document.activeElement && box.contains(document.activeElement) && document.activeElement.tagName === "INPUT")) fillSyncPanel(k);
+    });
+    var side = document.getElementById("sideSync"); if (side) side.innerHTML = syncStatusLine(window.WCA_SYNC.state());
+  }
+  // Called by sync after merging the cloud copy. Updates objects in place so
+  // views that hold references to module or exam records keep working.
+  function applyMerged(m) {
+    ["name", "started", "lastBackup", "version"].forEach(function (k) { if (m[k] !== undefined) S[k] = m[k]; });
+    S.srs = m.srs || {}; S.streak = m.streak || { last: "", count: 0 };
+    ["modules", "exams"].forEach(function (group) {
+      Object.keys(m[group] || {}).forEach(function (id) {
+        var src = m[group][id], dst = S[group][id];
+        if (!dst) { S[group][id] = src; return; }
+        Object.keys(dst).forEach(function (key) { if (!(key in src)) delete dst[key]; });
+        Object.keys(src).forEach(function (key) { dst[key] = src[key]; });
+      });
+    });
+    saveLocal();
+    var p = (location.hash || "#/").slice(2).split("/");
+    var midTask = (p[0] === "m" && /^(l|cards|teach|exam)$/.test(p[2] || "")) || /^(review|cp|final|tools)$/.test(p[0]);
+    if (midTask) { renderSidebar(lastActiveId); updateBadge(); } // never re-render under someone mid-question
+    else route();
+  }
+
   // ---------- Sidebar ----------
+  var lastActiveId = null;
   function renderSidebar(activeId) {
+    lastActiveId = activeId;
     var cur = currentUnit(), h = "", lastTrack = null, n = 0;
     // On phones the top bar only has room for Review, so the other pages live here (hidden on desktop by CSS).
     h += '<nav class="side-mobile-nav" aria-label="Pages"><a href="#/">Home</a><a href="#/tools">Tools</a><a href="#/glossary">Glossary</a><a href="#/resources">Library</a><a href="#/progress">Transcript</a></nav>';
@@ -223,6 +296,7 @@
       else if (!open) num = "&#128274;";
       h += '<a class="' + cls + '" href="' + (open ? unitHref(u) : "javascript:void(0)") + '"><span class="num">' + num + '</span><span class="lbl">' + esc(unitTitle(u)) + "</span></a>";
     });
+    if (window.WCA_SYNC && window.WCA_SYNC.enabled) h += '<div class="side-sync" id="sideSync">' + syncStatusLine(window.WCA_SYNC.state()) + "</div>";
     document.getElementById("sidebar").innerHTML = h;
   }
 
@@ -257,6 +331,7 @@
     if (S.name && started && backupDue()) {
       h += '<div class="callout warn"><strong>Back up your progress</strong>' + lastBackupText() + ' Progress is stored in this browser only, so a backup file protects it if you switch computers or clear your browsing data.' + backupControls("home") + "</div>";
     }
+    if (S.name) h += syncPanel("home");
     h += '<div class="card"><h2>How this course makes it stick</h2>' +
       "<p>The structure follows learning techniques with the strongest experimental support (Dunlosky et al., 2013, <em>Psychological Science in the Public Interest</em> 14(1)):</p><ul>" +
       "<li><strong>Retrieval practice.</strong> Every lesson ends with questions you must answer correctly, and every module ends with a randomized exam. Testing yourself produces better long-term retention than rereading (Roediger &amp; Karpicke, 2006, <em>Psychological Science</em> 17(3)).</li>" +
@@ -267,6 +342,7 @@
     h += '<div class="card"><h2>Important</h2><p class="small">This course builds vocabulary and conceptual fluency. It does not certify field competence, replace required training (for example OSHA HAZWOPER, nuclear gauge safety, or WisDOT HTCP and ACI certifications), or substitute for the current text of a regulation, standard, or project specification. Regulations and standards are revised; always check the current edition before relying on a number in practice.</p></div>';
     render(h);
     if (document.getElementById("home-exp")) wireBackup("home");
+    fillSyncPanel("home");
     var go = document.getElementById("nmGo");
     if (go) go.onclick = function () { S.name = document.getElementById("nm").value.trim() || "Learner"; save(); route(); };
   }
@@ -370,14 +446,19 @@
     if (!guardUnit(u)) return;
     var ss = stepState(m), st = mstate(id);
     if (!ss.allLessons) { location.hash = "#/m/" + id; return; }
-    var queue = shuffle(m.terms.map(function (_, i) { return i; })), firstRating = {}, flipped = false, reverse = false, total = queue.length;
+    // Resume an unfinished deck if one was saved (e.g., the app was closed mid-deck).
+    var saved = st.cardSession, total = m.terms.length;
+    var valid = saved && Array.isArray(saved.queue) && saved.queue.length && saved.queue.every(function (x) { return x >= 0 && x < total; });
+    var queue = valid ? saved.queue.slice() : shuffle(m.terms.map(function (_, i) { return i; }));
+    var firstRating = valid && saved.firstRating ? Object.assign({}, saved.firstRating) : {}, flipped = false, reverse = false;
+    function persist() { st.cardSession = { queue: queue.slice(), firstRating: firstRating }; save(); }
     function draw() {
       if (!queue.length) {
         m.terms.forEach(function (_, i) {
           var r = firstRating[i];
           srsSeed("t:" + id + ":" + i, r === "easy" ? 2 : r === "good" ? 1 : 0, r === "easy" ? 3 : r === "good" ? 1 : 0.5);
         });
-        st.cards = Date.now(); save(); updateBadge();
+        st.cards = Date.now(); delete st.cardSession; save(); updateBadge();
         render('<div class="crumbs"><a href="#/m/' + id + '">Module ' + m.n + ": " + esc(m.title) + '</a></div><h1>Flashcards complete</h1><p>All ' + total + ' terms are now in your spaced-review deck. They will come back in <a href="#/review">Review</a> on an expanding schedule.</p><div class="btn-row"><a class="btn" href="#/m/' + id + ((m.teach || []).length ? "/teach" : "/exam") + '">Continue &rarr;</a><a class="btn ghost" href="#/glossary">Open glossary</a></div>');
         renderSidebar(id);
         return;
@@ -386,7 +467,7 @@
       var front = reverse ? '<div class="face">' + t.def + "</div>" : '<div class="face term">' + esc(t.term) + "</div>";
       var back = reverse ? '<div class="face term">' + esc(t.term) + "</div>" : '<div class="face">' + t.def + "</div>";
       var h = '<div class="crumbs"><a href="#/m/' + id + '">Module ' + m.n + ": " + esc(m.title) + "</a></div><h1>Flashcards</h1>" +
-        '<p class="small muted">Say the answer out loud or in your head <em>before</em> you flip. Cards you miss come back until you get them. Remaining: ' + queue.length + " of " + total + ".</p>" +
+        '<p class="small muted">Say the answer out loud or in your head <em>before</em> you flip. Cards you miss come back until you get them. Remaining: ' + queue.length + " of " + total + ". Your place is saved if you leave.</p>" +
         '<div class="progress"><span style="width:' + ((total - queue.length) / total * 100) + '%"></span></div><br>' +
         '<div class="flash" id="flash"><div><div class="side-label">' + (flipped ? (reverse ? "Term" : "Definition") : (reverse ? "Definition → name the term" : "Term → recall the definition")) + "</div>" + (flipped ? back : front) + "</div></div>" +
         '<div class="btn-row">' + (flipped
@@ -403,6 +484,7 @@
           if (!(i in firstRating)) firstRating[i] = r;
           queue.shift();
           if (r === "again") queue.splice(Math.min(queue.length, 3), 0, i);
+          if (queue.length) persist();
           flipped = false; draw();
         };
       });
@@ -423,8 +505,9 @@
     var h = '<div class="crumbs"><a href="#/m/' + id + '">Module ' + m.n + ": " + esc(m.title) + "</a></div><h1>Teach-back</h1>" +
       '<p>Explain each idea as if you were briefing a new coworker. Write at least ' + MIN + ' characters <em>without looking back at the lessons</em>, then reveal the model answer and compare. Generating an explanation, even an imperfect one, is what makes it stick.</p>';
     m.teach.forEach(function (t, i) {
-      var saved = st.teach[i] || "";
-      h += '<div class="card"><h3>Prompt ' + (i + 1) + "</h3><p>" + t.prompt + '</p><textarea data-i="' + i + '" placeholder="Your explanation...">' + esc(typeof saved === "string" ? saved : "") + '</textarea>' +
+      var saved = st.teach[i] || "", draft = (st.teachDraft || {})[i] || "";
+      var shown = typeof saved === "string" && saved ? saved : draft;
+      h += '<div class="card"><h3>Prompt ' + (i + 1) + "</h3><p>" + t.prompt + '</p><textarea data-i="' + i + '" placeholder="Your explanation (drafts save automatically)...">' + esc(shown) + '</textarea>' +
         '<div class="small muted cc" data-i="' + i + '"></div><div class="btn-row"><button class="btn secondary rv" data-i="' + i + '">Reveal model answer</button></div><div class="model" data-i="' + i + '"' + (saved ? "" : ' hidden') + '><div class="callout"><strong>Model answer</strong>' + t.model + '</div><p class="small muted">Did you miss anything important? Add it to your answer above in your own words before moving on.</p></div></div>';
     });
     h += '<div class="btn-row"><button class="btn" id="tdone">Save and continue to exam</button></div><div id="tmsg"></div>';
@@ -436,7 +519,15 @@
         main.querySelector('.rv[data-i="' + i + '"]').disabled = n < MIN;
       });
     }
-    main.querySelectorAll("textarea").forEach(function (ta) { ta.oninput = counts; });
+    var draftTimer = null;
+    main.querySelectorAll("textarea").forEach(function (ta) {
+      ta.oninput = function () {
+        counts();
+        st.teachDraft = st.teachDraft || {};
+        st.teachDraft[ta.getAttribute("data-i")] = ta.value;
+        clearTimeout(draftTimer); draftTimer = setTimeout(save, 600);
+      };
+    });
     main.querySelectorAll(".rv").forEach(function (b) {
       b.onclick = function () {
         var i = b.getAttribute("data-i"), ta = main.querySelector('textarea[data-i="' + i + '"]');
@@ -675,6 +766,7 @@
   function viewProgress() {
     renderSidebar(null);
     var h = "<h1>Transcript</h1><p><strong>" + esc(S.name || "Learner") + "</strong> · started " + fmtDate(S.started) + "</p>";
+    h += syncPanel("tr");
     h += '<div class="tbl-wrap"><table><thead><tr><th>Unit</th><th>Status</th><th>Best</th><th>Attempts</th><th>Passed on</th></tr></thead><tbody>';
     UNITS.forEach(function (u) {
       var st = u.kind === "module" ? mstate(u.id) : estate(u.id);
@@ -686,6 +778,7 @@
       '<div class="btn-row"><button class="btn danger" id="rst">Reset all progress</button></div><div id="pmsg"></div></div>';
     render(h);
     wireBackup("tr");
+    fillSyncPanel("tr");
     var pmsg = document.getElementById("pmsg");
     var armed = false;
     document.getElementById("rst").onclick = function () {
@@ -742,4 +835,8 @@
   });
   window.addEventListener("hashchange", route);
   route();
+  if (window.WCA_SYNC) {
+    window.WCA_SYNC.onChange(refreshSyncUI);
+    window.WCA_SYNC.init({ getState: function () { return S; }, applyMerged: applyMerged, route: route });
+  }
 })();
