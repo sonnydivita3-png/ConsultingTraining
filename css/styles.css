@@ -81,7 +81,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 1.5em 0; }
 
 /* Top bar */
 .topbar {
-  position: sticky; top: 0; z-index: 20;
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
   display: flex; align-items: center; gap: 12px;
   padding: 10px 16px;
   background: var(--surface);
