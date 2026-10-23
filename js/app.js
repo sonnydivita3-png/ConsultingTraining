@@ -1,4 +1,4 @@
-/* Wisconsin Consulting Academy — mastery-gated course runner.
+/* Giles Engineering Associates: On-boarding Training — mastery-gated course runner.
  * Plain JavaScript, no dependencies. Progress is stored in localStorage
  * and can be exported/imported as JSON from the Transcript page. */
 (function () {
@@ -185,7 +185,7 @@
     var terms = C.modules.reduce(function (a, m) { return a + m.terms.length; }, 0);
     var qs = C.modules.reduce(function (a, m) { return a + m.exam.bank.length; }, 0);
     var due = dueItems().length;
-    var h = "<h1>Wisconsin Consulting Academy</h1>";
+    var h = "<h1>" + esc(C.title) + "</h1>";
     if (!S.name) {
       h += '<div class="card"><h2>Welcome</h2><p>This course takes a new employee from zero to fluent in the language of environmental consulting, geotechnical engineering, construction materials testing, and civil engineering as practiced in Wisconsin. It is long by design. Plan on roughly <strong>' + hours + ' hours</strong> of study spread over several weeks, plus a few minutes of daily review.</p>' +
         '<label for="nm"><strong>Your name</strong> (for your transcript and certificate)</label><input id="nm" type="text" placeholder="First Last"><div class="btn-row"><button class="btn" id="nmGo">Start the course</button></div></div>';

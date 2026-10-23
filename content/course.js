@@ -17,7 +17,7 @@
  *   { type: "num",   q, answer: number, tol: number, unit, explain }
  */
 window.COURSE = {
-  title: "Wisconsin Consulting Academy",
+  title: "Giles Engineering Associates: On-boarding Training",
   passMark: 0.8,
   checkpointPassMark: 0.8,
   finalPassMark: 0.85,
