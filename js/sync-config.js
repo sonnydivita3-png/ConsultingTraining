@@ -7,5 +7,5 @@
  * Never put the "service_role" or secret key here. */
 window.WCA_SYNC_CONFIG = {
   url: "",  // e.g. "https://abcdefghijklmnop.supabase.co"
-  key: ""   // the anon / publishable key
+  key: "sb_publishable_FmqPPh8aqnAYhGO7FWEvuw_ARvK_tfk"   // the anon / publishable key
 };
