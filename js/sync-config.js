@@ -7,5 +7,5 @@
  * Never put the "service_role" or secret key here. */
 window.WCA_SYNC_CONFIG = {
   url: "https://rhvtlidogxpgwcihgmfk.supabase.co",
-  key: "sb_publishable_FmqPPh8aqnAYhGO7FWEvuw_ARvK_tfk"   // the anon / publishable key
+  key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJodnRsaWRvZ3hwZ3djaWhnbWZrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI4NDYyMzksImV4cCI6MjEwODQyMjIzOX0.X0m1gnvuEVU8vOTkaOHNlluNFliknSbKu4ilPp3sYc8"   // the anon / publishable key
 };
